@@ -51,7 +51,7 @@ merge_on_download(
     dataset_path=pathA,
     real_dirs=["test-20250112T065939Z-001/test/real", "train-20250112T065955Z-001/train/real"],
     fake_dirs=["test-20250112T065939Z-001/test/fake", "train-20250112T065955Z-001/train/fake"],
-    output_dir="../data/kaggle_a"
+    output_dir="../rawdata/kaggle_a"
 )
 
 pathB = kagglehub.dataset_download("tristanzhang32/ai-generated-images-vs-real-images")
@@ -59,7 +59,7 @@ merge_on_download(
     dataset_path=pathB,
     real_dirs=["test/real", "train/real"],
     fake_dirs=["test/fake", "train/fake"],
-    output_dir="../data/kaggle_b"
+    output_dir="../rawdata/kaggle_b"
 )
 
 pathHF = snapshot_download("Hemg/AI-Generated-vs-Real-Images-Datasets", repo_type="dataset")
@@ -67,7 +67,7 @@ merge_on_download(
     dataset_path=pathHF,
     real_dirs=["RealArt/RealArt"],
     fake_dirs=["AiArtData/AiArtData"],
-    output_dir="../data/hf"
+    output_dir="../rawdata/hf"
 )
 
 # Following code downloads datasets with original structure preserved.
