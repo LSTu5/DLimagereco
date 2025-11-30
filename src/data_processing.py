@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
-
+from tqdm import tqdm
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
@@ -65,9 +65,9 @@ def save_processed(dataset, name, output_root="../dataset"):
         (out_spatial / cls).mkdir(parents=True, exist_ok=True)
         (out_freq / cls).mkdir(parents=True, exist_ok=True)
 
-    print(f"Processing dataset {name}")
 
-    for i in range(len(dataset)):
+
+    for i in tqdm(range(len(dataset)), desc=f"Saving {name}", ncols=120):
         try:
             img_tensor, freq, label, src_path = dataset[i]
         except Exception:
@@ -81,12 +81,14 @@ def save_processed(dataset, name, output_root="../dataset"):
         spatial_pil = Image.fromarray(spatial_img)
 
         fname = os.path.basename(src_path)
-        spatial_pil.save(out_spatial / cls / fname)
+        stem = Path(fname).stem
+        out_name = f"{stem}.png"
+        spatial_pil.save(out_spatial / cls / out_name)
 
         # Save FFT image
         freq_img = (freq.squeeze().numpy() * 255).astype(np.uint8)
         freq_pil = Image.fromarray(freq_img)
-        freq_pil.save(out_freq / cls / fname)
+        freq_pil.save(out_freq / cls / out_name)
 
     print(f"Saved processed dataset to {out_base}\n")
 
@@ -117,12 +119,12 @@ def main():
     dsB = AIDetectorDataset("../rawdata/kaggle_b")
     dsHF = AIDetectorDataset("../rawdata/hf")
 
-    print(f"A: {len(dsA)}, B: {len(dsB)}, HF: {len(dsHF)}")
+    # print(f"A: {len(dsA)}, B: {len(dsB)}, HF: {len(dsHF)}")
 
-    # Show samples first (optional)
-    show_samples(dsA)
-    show_samples(dsB)
-    show_samples(dsHF)
+    # Show samples from each dataset
+    # show_samples(dsA)
+    # show_samples(dsB)
+    # show_samples(dsHF)
 
     # Save processed datasets
     save_processed(dsA, "kaggle_a")
