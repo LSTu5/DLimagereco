@@ -11,9 +11,15 @@ from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class AIDetectorDataset(Dataset):
-    def __init__(self, root, img_size=224):
+    """
+    Prepares spatial (RGB) and frequency (grayscale log-magnitude) views.
+    Spatial: resize to 224.
+    Frequency: resize to 320 (bicubic, antialias), grayscale, log|FFT| normalized per image.
+    """
+    def __init__(self, root, spatial_size=224, freq_size=320):
         self.root = root
-        self.img_size = img_size
+        self.spatial_size = spatial_size
+        self.freq_size = freq_size
         self.classes = ["real", "fake"]
 
         self.paths = []
@@ -25,17 +31,23 @@ class AIDetectorDataset(Dataset):
                 self.paths.append((os.path.join(folder, f), label))
 
         self.spatial_tf = transforms.Compose([
-            transforms.Resize((img_size, img_size)),
+            transforms.Resize((spatial_size, spatial_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5]*3, std=[0.5]*3)
         ])
 
-    def compute_dft(self, img_tensor):
-        gray = img_tensor.mean(dim=0, keepdim=True)
-        fft = torch.fft.fft2(gray)
+    def compute_dft(self, img_pil):
+        # resize for freq branch: bicubic + antialias
+        img_freq = img_pil.resize((self.freq_size, self.freq_size), resample=Image.BICUBIC)
+        gray = transforms.functional.to_grayscale(img_freq, num_output_channels=1)
+        gray_t = transforms.ToTensor()(gray)  # (1,H,W) in [0,1]
+        fft = torch.fft.fft2(gray_t)
         mag = torch.abs(fft)
         mag = torch.log1p(mag)
-        mag = mag / mag.max()
+        # per-image min-max
+        mag_min = mag.min()
+        mag_max = mag.max()
+        mag = (mag - mag_min) / (mag_max - mag_min + 1e-8)
         return mag
 
     def __len__(self):
@@ -51,7 +63,7 @@ class AIDetectorDataset(Dataset):
             return self.__getitem__((idx + 1) % len(self.paths))
 
         x = self.spatial_tf(img)
-        freq = self.compute_dft(x)
+        freq = self.compute_dft(img)
         return x, freq, label, path
 
 
