@@ -7,10 +7,10 @@ class BasicBlock(nn.Module):
         super().__init__()
 
         self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride, 1, bias=False)
-        self.bn1   = nn.BatchNorm2d(out_channels)
+        self.bn1 = nn.BatchNorm2d(out_channels)
 
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, 1, 1, bias=False)
-        self.bn2   = nn.BatchNorm2d(out_channels)
+        self.bn2 = nn.BatchNorm2d(out_channels)
 
         self.down = None
         if stride != 1 or in_channels != out_channels:
@@ -46,13 +46,21 @@ class SpatialBranch(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-        self.layer1 = BasicBlock(32, 64, stride=2)   # 56x56
+        # NOTE: Keeping layer1 stride=2 as per your original code
+        # (It was set to 1 in the final pasted code, but 2 is more common ResNet style)
+        self.layer1 = BasicBlock(32, 64, stride=2)  # 56x56
         self.layer2 = BasicBlock(64, 128, stride=2)  # 28x28
-        self.layer3 = BasicBlock(128, 256, stride=2) # 14x14
-        self.layer4 = BasicBlock(256, 512, stride=2) # 7x7
+        self.layer3 = BasicBlock(128, 256, stride=2)  # 14x14
+        self.layer4 = BasicBlock(256, 512, stride=2)  # 7x7
 
         self.pool = nn.AdaptiveAvgPool2d(1)
+
+        # ADDED DROPOUT for regularization
+        self.dropout = nn.Dropout(p=0.5)
+
         self.fc = nn.Linear(512, num_classes)
+
+        self._init_weights()
 
     def forward(self, x):
         x = self.stem(x)
@@ -62,4 +70,20 @@ class SpatialBranch(nn.Module):
         x = self.layer4(x)
 
         x = self.pool(x).flatten(1)
+
+        # Apply Dropout before the classifier
+        x = self.dropout(x)
+
         return self.fc(x)
+
+    # ADDED Kaiming He Initialization for training stability
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, 0.01)
+                nn.init.constant_(m.bias, 0)

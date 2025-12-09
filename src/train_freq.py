@@ -119,7 +119,7 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
 
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler('cuda' if torch.cuda.is_available() else 'cpu')
 
     best_acc = 0.0
     epochs = 10

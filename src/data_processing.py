@@ -119,7 +119,7 @@ def main():
     dsB = AIDetectorDataset("../rawdata/kaggle_b")
     dsHF = AIDetectorDataset("../rawdata/hf")
 
-    # print(f"A: {len(dsA)}, B: {len(dsB)}, HF: {len(dsHF)}")
+    print(f"A: {len(dsA)}, B: {len(dsB)}, HF: {len(dsHF)}")
 
     # Show samples from each dataset
     # show_samples(dsA)

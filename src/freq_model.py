@@ -25,7 +25,7 @@ class FreqBlock(nn.Module):
         return F.relu(out + identity)
 
 class FrequencyBranch(nn.Module):
-    def __init__(self, num_classes=2, stem_channels=16):
+    def __init__(self, num_classes=2, stem_channels=32):
         super().__init__()
         self.stem = nn.Sequential(
             nn.Conv2d(1, stem_channels, 3, stride=2, padding=1, bias=False),  # 112x112
