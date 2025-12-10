@@ -1,95 +1,29 @@
-from pathlib import Path
-from PIL import Image
-from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
-from torchvision import transforms
+from tqdm import tqdm
+from pathlib import Path
 from freq_model import FrequencyBranch
 
-class GaussianNoise(object):
-    def __init__(self, mean=0., std=1.):
-        self.std = std
-        self.mean = mean
-        
-    def __call__(self, tensor):
-        return tensor + torch.randn(tensor.size()) * self.std + self.mean
-
-    def __repr__(self):
-        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
-
-
-class FrequencyImageDataset(Dataset):
-    def __init__(self, roots, img_size=224, augment=True):
-        self.paths = []
-        self.labels = []
-
-        for root in roots:
-            for cls, label in [("real", 0), ("fake", 1)]:
-                folder = Path(root) / cls
-                if not folder.exists():
-                    continue
-                for f in folder.iterdir():
-                    if f.suffix.lower() in [".png", ".jpg", ".jpeg"]:
-                        self.paths.append(str(f))
-                        self.labels.append(label)
-
-        if augment:
-            self.tf = transforms.Compose([
-                transforms.Resize((img_size, img_size)),
-                transforms.RandomHorizontalFlip(),
-                # Add robustness against compression/resize artifacts
-                transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
-                transforms.ToTensor(),
-                # Add noise after normalization? No, usually before or on tensor
-                GaussianNoise(0., 0.05),
-            ])
-        else:
-            self.tf = transforms.Compose([
-                transforms.Resize((img_size, img_size)),
-                transforms.ToTensor(),
-            ])
-
-        # Grayscale normalize for single-scale DFT
-        self.normalize = transforms.Normalize([0.5], [0.5])
-
-    def __len__(self):
-        return len(self.paths)
-
-    def __getitem__(self, idx):
-        img_path = self.paths[idx]
-        label = self.labels[idx]
-
-        img = Image.open(img_path).convert("L")
-        img = self.tf(img)
-        img = self.normalize(img)
-
-        return img, label
-
-
-def _effective_len(loader):
-    if hasattr(loader, "sampler") and loader.sampler is not None:
-        try:
-            return len(loader.sampler)
-        except TypeError:
-            return len(loader.dataset)
-    return len(loader.dataset)
+# --- IMPORT THE NEW DYNAMIC LOADER ---
+# This handles the FFT calculation and Normalization automatically
+from loaders import get_dataloaders
 
 def train_one_epoch(model, loader, criterion, optimizer, scaler, device, max_grad_norm=1.0):
     model.train()
     total_loss = 0
     correct = 0
-    total_samples = _effective_len(loader)
+    total_samples = len(loader.dataset)
 
     pbar = tqdm(loader, ncols=120)
     for imgs, labels in pbar:
         imgs = imgs.to(device)
         labels = labels.to(device)
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
-        with torch.cuda.amp.autocast():
+        # Mixed Precision Training (Speed + Stability)
+        with torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu'):
             logits = model(imgs)
             loss = criterion(logits, labels)
 
@@ -112,7 +46,7 @@ def validate(model, loader, criterion, device):
     model.eval()
     total_loss = 0.0
     correct = 0
-    total_samples = _effective_len(loader)
+    total_samples = len(loader.dataset)
 
     with torch.no_grad():
         for imgs, labels in loader:
@@ -128,84 +62,53 @@ def validate(model, loader, criterion, device):
     return total_loss / total_samples, correct / total_samples
 
 def main():
-    # Resolve dataset paths
+    # 1. SETUP PATHS
     repo_root = Path(__file__).resolve().parents[1]
-    data_root = repo_root / "dataset"
-    split_root = data_root / "dataset_split"
+    
+    # Point directly to the RAW data (bypassing the 'dataset' folder)
+    raw_roots = [
+        str(repo_root / "rawdata" / "kaggle_a"),
+        str(repo_root / "rawdata" / "kaggle_b"),
+        str(repo_root / "rawdata" / "hf"),
+    ]
 
-    if split_root.exists():
-        train_roots = [str(split_root / "train")]
-        val_roots = [str(split_root / "val")]
+    print("Initializing Dynamic Frequency Loaders (Calculating FFT on the fly)...")
+    
+    # mode='freq' tells the loader to run the FFT math and Normalization
+    train_loader, val_loader = get_dataloaders(raw_roots, mode='freq', batch_size=32)
+    
+    print(f"Train samples: {len(train_loader.dataset)}")
+    print(f"Val samples:   {len(val_loader.dataset)}")
 
-        train_set = FrequencyImageDataset(train_roots, augment=True)
-        val_set = FrequencyImageDataset(val_roots, augment=False)
-
-        if len(train_set) == 0 or len(val_set) == 0:
-            raise RuntimeError("Empty train/val set in dataset_split.")
-
-        train_indices = list(range(len(train_set)))
-        val_indices = list(range(len(val_set)))
-
-        train_loader = DataLoader(train_set, batch_size=32, shuffle=True, num_workers=4)
-        val_loader = DataLoader(val_set, batch_size=32, shuffle=False, num_workers=4)
-    else:
-        roots = [
-            str(data_root / "kaggle_b"),
-            str(data_root / "kaggle_a"),
-            str(data_root / "hf"),
-        ]
-        full_set = FrequencyImageDataset(roots, augment=True)
-        val_set = FrequencyImageDataset(roots, augment=False)
-
-        if len(full_set) < 2:
-            raise RuntimeError(f"Not enough images found in: {roots}")
-
-        val_ratio = 0.1
-        val_size = max(1, int(len(full_set) * val_ratio))
-        indices = torch.randperm(len(full_set), generator=torch.Generator().manual_seed(42)).tolist()
-        val_indices = indices[:val_size]
-        train_indices = indices[val_size:]
-
-        train_loader = DataLoader(
-            full_set,
-            batch_size=32,
-            sampler=SubsetRandomSampler(train_indices),
-            num_workers=4,
-        )
-        val_loader = DataLoader(
-            val_set,
-            batch_size=32,
-            sampler=SubsetRandomSampler(val_indices),
-            num_workers=4,
-        )
-        # for reporting
-        train_set = full_set
-
-    train_count = len(train_indices) if 'train_indices' in locals() else len(train_set)
-    val_count = len(val_indices) if 'val_indices' in locals() else len(val_set)
-    print("Train samples:", train_count)
-    print("Val samples:", val_count)
-
+    # 2. SETUP MODEL
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    # Initialize model
+    # Note: FrequencyBranch expects 1-channel input, which our loader provides
     model = FrequencyBranch(num_classes=2).to(device)
 
-    # Label smoothing + higher weight decay; slightly higher LR since regularized
+    # 3. SETUP OPTIMIZER
+    # Label smoothing helps with noisy data
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    
+    # AdamW with decent weight decay to prevent overfitting
     optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-2)
 
     scaler = torch.amp.GradScaler('cuda' if torch.cuda.is_available() else 'cpu')
 
+    # 4. TRAINING LOOP
     best_acc = 0.0
     best_val_loss = float('inf')
-    epochs = 10
-    patience = 10
+    epochs = 15  # Frequency needs a bit more time to converge
+    patience = 8
     patience_counter = 0
 
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', factor=0.5, patience=5
+        optimizer, mode='max', factor=0.5, patience=3
     )
 
     best_path = repo_root / "best_frequency.pth"
+    
     for epoch in range(1, epochs + 1):
         print(f"\nEpoch {epoch}/{epochs}")
 
@@ -221,7 +124,7 @@ def main():
 
         scheduler.step(val_acc)
 
-        # Early stopping and save best
+        # Save Best
         if val_acc > best_acc:
             best_acc = val_acc
             best_val_loss = val_loss
@@ -236,7 +139,6 @@ def main():
 
     print("\nTraining complete.")
     print(f"Best validation accuracy: {best_acc:.4f}")
-    print(f"Best validation loss: {best_val_loss:.4f}")
 
 if __name__ == "__main__":
     main()
