@@ -148,8 +148,8 @@ def main():
 
     # Prefer split dataset if it exists; else use kaggle_a + kaggle_b and split in-memory
     if split_root.exists():
-        train_roots = [str(split_root / "train" / "spatial")]
-        val_roots = [str(split_root / "val" / "spatial")]
+        train_roots = [str(split_root / "train")]
+        val_roots = [str(split_root / "val")]
 
         train_set = SpatialImageDataset(train_roots, augment=True)
         val_set = SpatialImageDataset(val_roots, augment=False)
@@ -166,8 +166,8 @@ def main():
         val_loader = DataLoader(val_set, batch_size=32, shuffle=False, num_workers=4)
     else:
         roots = [
-            str(data_root / "kaggle_b" / "spatial"),
-            str(data_root / "kaggle_a" / "spatial"),
+            str(data_root / "kaggle_b"),
+            str(data_root / "kaggle_a"),
         ]
         full_set = SpatialImageDataset(roots, augment=True)
         val_set = SpatialImageDataset(roots, augment=False)
@@ -217,9 +217,10 @@ def main():
     patience_counter = 0
     # Reduce LR on plateau
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', factor=0.5, patience=5, verbose=True
+        optimizer, mode='max', factor=0.5, patience=5
     )
 
+    best_path = repo_root / "best_spatial.pth"
     for epoch in range(1, epochs + 1):
         print(f"\nEpoch {epoch}/{epochs}")
 
@@ -241,8 +242,8 @@ def main():
             best_acc = val_acc
             best_val_loss = val_loss
             patience_counter = 0
-            torch.save(model.state_dict(), "best_spatial.pth")
-            print("Saved: best_spatial.pth")
+            torch.save(model.state_dict(), best_path)
+            print(f"Saved: {best_path}")
         else:
             patience_counter += 1
             if patience_counter >= patience:

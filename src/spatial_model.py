@@ -47,12 +47,20 @@ class SpatialBranch(nn.Module):
 
         self._init_weights()
 
-    def forward(self, x):
+    def forward(self, x, return_features: bool = False):
         x = self.stem(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+
+        if return_features:
+            feats = x
+            pooled = self.pool(feats).flatten(1)
+            pooled = self.dropout(pooled)
+            logits = self.fc(pooled)
+            return feats, logits
+
         x = self.pool(x).flatten(1)
         x = self.dropout(x)
         return self.fc(x)
