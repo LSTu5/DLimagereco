@@ -23,3 +23,52 @@ This repo builds a classifier to distinguish real vs. AI-generated images with t
 - Split: `python src/split_train_val.py`
 - Train spatial: `python src/train_spatial.py`
 - Train frequency: `python src/train_freq.py`
+
+
+
+
+## Setup
+
+### 1. Create virtual environment
+```bash
+# Create venv
+python3 -m venv venv
+
+# Activate (Mac/Linux)
+source venv/bin/activate
+
+# Activate (Windows)
+# venv\Scripts\activate
+```
+
+### 2. Install dependencies
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 3. Configure Kaggle API (for dataset downloads)
+```bash
+# Download your Kaggle API token from https://www.kaggle.com/settings
+# Place kaggle.json in ~/.kaggle/
+mkdir -p ~/.kaggle
+cp /path/to/kaggle.json ~/.kaggle/
+chmod 600 ~/.kaggle/kaggle.json
+```
+
+### 4. Run the pipeline
+```bash
+# Download raw datasets
+python src/data_downloader.py
+
+# Process to dual views
+python src/data_processing.py
+
+# Create train/val splits
+python src/split_train_val.py
+
+# Train models
+python src/train_spatial.py
+python src/train_freq.py
+```
+

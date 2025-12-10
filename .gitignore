@@ -1,0 +1,55 @@
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Data directories (these can be large!)
+rawdata/
+dataset/
+data/
+
+# Model checkpoints and logs (can be large)
+checkpoints/
+*.pth
+*.pt
+logs/
+runs/
+wandb/
+
+# Kaggle credentials
+.kaggle/
+kaggle.json
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*.swo
+*~
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
