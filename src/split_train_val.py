@@ -49,13 +49,28 @@ def split_and_copy(sources: Iterable[Path], out_root: Path, val_ratio: float = V
 
 
 def main() -> None:
+    """Main entry point: create train/val split from processed datasets.
+    
+    This script should be run after data_processing.py has created the processed
+    datasets in ../dataset/. By default, it combines kaggle_a and kaggle_b for
+    training, leaving hf dataset for testing.
+    
+    You can modify the 'sources' list to include different datasets or change
+    the validation ratio as needed.
+    """
+    # Navigate to repo root and locate processed datasets
     repo_root = Path(__file__).resolve().parents[1]
     data_root = repo_root / "dataset"
+    
+    # Specify which processed datasets to include in train/val split
+    # Note: hf dataset is reserved for final testing
     sources = [data_root / "kaggle_a", data_root / "kaggle_b"]
 
+    # Create output directory for split dataset
     out_root = data_root / "dataset_split"
     out_root.mkdir(parents=True, exist_ok=True)
 
+    # Perform the split and copy files
     split_and_copy(sources, out_root, val_ratio=VAL_RATIO)
     print(f"Done. Train/val splits at: {out_root}")
 
