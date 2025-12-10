@@ -92,7 +92,13 @@ class DynamicDataset(Dataset):
         raise ValueError(f"Unknown mode: {self.mode}")
 
 
-def get_dataloaders(raw_roots: List[str], mode: str = "spatial", batch_size: int = 32, val_split: float = 0.2):
+def get_dataloaders(
+    raw_roots: List[str],
+    mode: str = "spatial",
+    batch_size: int = 32,
+    val_split: float = 0.2,
+    num_workers: int = 0,
+):
     """
     Create train/val loaders from raw roots. Uses on-the-fly transforms/FFT.
     """
@@ -106,6 +112,6 @@ def get_dataloaders(raw_roots: List[str], mode: str = "spatial", batch_size: int
         train_size, val_size = total, 0
     train_set, val_set = random_split(dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     return train_loader, val_loader
