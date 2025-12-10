@@ -1,148 +1,95 @@
 import os
+import shutil
 from pathlib import Path
-import matplotlib.pyplot as plt
-import numpy as np
 from tqdm import tqdm
-import torch
-from torch.utils.data import Dataset
-from torchvision import transforms
-from PIL import Image, ImageFile
+from PIL import Image
+import numpy as np
 
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-
-class AIDetectorDataset(Dataset):
+def process_dataset(raw_root, output_root, dataset_name):
     """
-    Prepares spatial (RGB) and frequency (grayscale log-magnitude) views.
-    Spatial: resize to 224.
-    Frequency: resize to 320 (bicubic, antialias), grayscale, log|FFT| normalized per image.
+    Copies images from rawdata structure to the unified dataset structure.
+    rawdata/
+      dataset_name/
+        real/
+        fake/
+    
+    to
+    
+    dataset/
+      dataset_name/
+        real/
+        fake/
+        
+    It also standardizes images to RGB png/jpg to ensure consistency, 
+    but keeps them as close to raw as possible (no resizing here).
     """
-    def __init__(self, root, spatial_size=224, freq_size=320):
-        self.root = root
-        self.spatial_size = spatial_size
-        self.freq_size = freq_size
-        self.classes = ["real", "fake"]
+    raw_path = Path(raw_root) / dataset_name
+    out_path = Path(output_root) / dataset_name
+    
+    if not raw_path.exists():
+        print(f"Raw dataset not found: {raw_path}")
+        return
 
-        self.paths = []
-        for label, cls in enumerate(self.classes):
-            folder = os.path.join(root, cls)
-            if not os.path.exists(folder):
-                continue
-            for f in os.listdir(folder):
-                self.paths.append((os.path.join(folder, f), label))
+    print(f"Processing {dataset_name} from {raw_path} to {out_path}...")
 
-        self.spatial_tf = transforms.Compose([
-            transforms.Resize((spatial_size, spatial_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5]*3, std=[0.5]*3)
-        ])
+    # Statistics
+    stats = {"real": 0, "fake": 0}
 
-    def compute_dft(self, img_pil):
-        # resize for freq branch: bicubic + antialias
-        img_freq = img_pil.resize((self.freq_size, self.freq_size), resample=Image.BICUBIC)
-        gray = transforms.functional.to_grayscale(img_freq, num_output_channels=1)
-        gray_t = transforms.ToTensor()(gray)  # (1,H,W) in [0,1]
-        fft = torch.fft.fft2(gray_t)
-        mag = torch.abs(fft)
-        mag = torch.log1p(mag)
-        # per-image min-max
-        mag_min = mag.min()
-        mag_max = mag.max()
-        mag = (mag - mag_min) / (mag_max - mag_min + 1e-8)
-        return mag
-
-    def __len__(self):
-        return len(self.paths)
-
-    def __getitem__(self, idx):
-        path, label = self.paths[idx]
-        try:
-            img = Image.open(path).convert("RGB")
-        except Exception:
-            # Skip and load the next valid image
-            print("Corrupted image skipped:", path)
-            return self.__getitem__((idx + 1) % len(self.paths))
-
-        x = self.spatial_tf(img)
-        freq = self.compute_dft(img)
-        return x, freq, label, path
-
-
-def save_processed(dataset, name, output_root="../dataset"):
-    out_base = Path(output_root) / name
-    out_spatial = out_base / "spatial"
-    out_freq = out_base / "freq"
-
-    # Create dirs
     for cls in ["real", "fake"]:
-        (out_spatial / cls).mkdir(parents=True, exist_ok=True)
-        (out_freq / cls).mkdir(parents=True, exist_ok=True)
-
-
-
-    for i in tqdm(range(len(dataset)), desc=f"Saving {name}", ncols=120):
-        try:
-            img_tensor, freq, label, src_path = dataset[i]
-        except Exception:
-            print(f"Corrupted file skipped: {dataset.paths[i][0]}")
+        src_dir = raw_path / cls
+        dst_dir = out_path / cls
+        
+        if not src_dir.exists():
             continue
-        cls = "real" if label == 0 else "fake"
+            
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        
+        # List all files
+        files = [f for f in src_dir.iterdir() if f.is_file()]
+        
+        for f in tqdm(files, desc=f"{dataset_name}/{cls}", ncols=100):
+            try:
+                # We simply copy the file if it's a valid image
+                # Check if valid image first
+                with Image.open(f) as img:
+                    img.verify() 
+                
+                # If valid, copy
+                shutil.copy2(f, dst_dir / f.name)
+                stats[cls] += 1
+                
+            except Exception as e:
+                print(f"Skipping corrupted/invalid file {f}: {e}")
 
-        # Save spatial image (denormalize first)
-        spatial_img = (img_tensor * 0.5 + 0.5).permute(1, 2, 0).numpy()
-        spatial_img = (spatial_img * 255).clip(0, 255).astype(np.uint8)
-        spatial_pil = Image.fromarray(spatial_img)
+    print(f"Finished {dataset_name}: {stats}")
 
-        fname = os.path.basename(src_path)
-        stem = Path(fname).stem
-        out_name = f"{stem}.png"
-        spatial_pil.save(out_spatial / cls / out_name)
-
-        # Save FFT image
-        freq_img = (freq.squeeze().numpy() * 255).astype(np.uint8)
-        freq_pil = Image.fromarray(freq_img)
-        freq_pil.save(out_freq / cls / out_name)
-
-    print(f"Saved processed dataset to {out_base}\n")
-
-def show_samples(dataset, n=2):
-    for i in range(n):
-        img_tensor, freq, label, _ = dataset[i]
-
-        img = (img_tensor * 0.5 + 0.5).permute(1, 2, 0).numpy()
-        freq_img = freq.squeeze().numpy()
-
-        plt.figure(figsize=(8, 4))
-
-        plt.subplot(1, 2, 1)
-        plt.title("Original")
-        plt.imshow(img)
-        plt.axis("off")
-
-        plt.subplot(1, 2, 2)
-        plt.title("FFT")
-        plt.imshow(freq_img, cmap="gray")
-        plt.axis("off")
-
-        plt.show()
 
 def main():
+    # Adjust these paths to where your raw data actually lives
+    # Assuming standard structure:
+    # project_root/
+    #   rawdata/
+    #     kaggle_a/
+    #     kaggle_b/
+    #     hf/
+    #   dataset/ (output)
+    
+    repo_root = Path(__file__).resolve().parents[1]
+    raw_root = repo_root / "rawdata" 
+    output_root = repo_root / "dataset"
+    
+    if not raw_root.exists():
+        # Fallback for user's potential path
+        raw_root = Path("../rawdata")
+        if not raw_root.exists():
+             print("Could not find 'rawdata' folder in ../rawdata or project root.")
+             return
 
-    dsA = AIDetectorDataset("../rawdata/kaggle_a")
-    dsB = AIDetectorDataset("../rawdata/kaggle_b")
-    dsHF = AIDetectorDataset("../rawdata/hf")
-
-    print(f"A: {len(dsA)}, B: {len(dsB)}, HF: {len(dsHF)}")
-
-    # Show samples from each dataset
-    # show_samples(dsA)
-    # show_samples(dsB)
-    # show_samples(dsHF)
-
-    # Save processed datasets
-    save_processed(dsA, "kaggle_a")
-    save_processed(dsB, "kaggle_b")
-    save_processed(dsHF, "hf")
-
+    # Process all three
+    process_dataset(raw_root, output_root, "kaggle_a")
+    process_dataset(raw_root, output_root, "kaggle_b")
+    process_dataset(raw_root, output_root, "hf")
 
 if __name__ == "__main__":
     main()
+
