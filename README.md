@@ -4,6 +4,7 @@ This repo builds a classifier to distinguish real vs. AI-generated images with t
 
 - **Spatial branch** ([src/spatial_model.py](src/spatial_model.py)): CNN with residual-style `BasicBlock`s, global pooling, dropout, and a linear head. Trained via [src/train_spatial.py](src/train_spatial.py), which includes strong data augmentation, mixup, AMP, and AdamW.
 - **Frequency branch** ([src/freq_model.py](src/freq_model.py)): Operates on log-magnitude FFT views; trained via [src/train_freq.py](src/train_freq.py).
+- **Fusion branch** ([src/fusion_model.py](src/fusion_model.py)): Pools spatial + frequency features and fuses them with a small MLP head; trained via [src/train_fusion.py](src/train_fusion.py) and evaluated with [src/eval_fusion.py](src/eval_fusion.py).
 
 ## Data pipeline
 1. **Download & merge** ([src/data_downloader.py](src/data_downloader.py)): Pulls Kaggle/Hugging Face datasets and merges class folders into `rawdata/*`.
@@ -23,6 +24,8 @@ This repo builds a classifier to distinguish real vs. AI-generated images with t
 - Split: `python src/split_train_val.py`
 - Train spatial: `python src/train_spatial.py`
 - Train frequency: `python src/train_freq.py`
+- Train fusion: `python src/train_fusion.py`
+- Eval fusion: `python src/eval_fusion.py`
 
 
 
@@ -71,4 +74,3 @@ python src/split_train_val.py
 python src/train_spatial.py
 python src/train_freq.py
 ```
-
