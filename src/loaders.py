@@ -97,7 +97,8 @@ def get_dataloaders(
     mode: str = "spatial",
     batch_size: int = 32,
     val_split: float = 0.2,
-    num_workers: int = 0,
+    num_workers: int = 4,   # Default to 4 workers
+    pin_memory: bool = True, # Default to True
 ):
     """
     Create train/val loaders from raw roots. Uses on-the-fly transforms/FFT.
@@ -112,6 +113,21 @@ def get_dataloaders(
         train_size, val_size = total, 0
     train_set, val_set = random_split(dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    # persistent_workers=True keeps the workers alive, saving startup time
+    train_loader = DataLoader(
+        train_set, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=(num_workers > 0)
+    )
+    val_loader = DataLoader(
+        val_set, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=(num_workers > 0)
+    )
     return train_loader, val_loader

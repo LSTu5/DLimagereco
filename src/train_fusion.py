@@ -87,11 +87,18 @@ def main():
     raw_roots = [
         str(repo_root / "rawdata" / "kaggle_a"),
         str(repo_root / "rawdata" / "kaggle_b"),
-        str(repo_root / "rawdata" / "hf"),
+
     ]
 
     print("Initializing Fusion Loaders (RGB + FFT views)...")
-    train_loader, val_loader = get_dataloaders(raw_roots, mode="fusion", batch_size=24)
+    # Using 8 workers and batch size 48 to keep the GPU fed
+    train_loader, val_loader = get_dataloaders(
+        raw_roots, 
+        mode="fusion", 
+        batch_size=48, 
+        num_workers=8, 
+        pin_memory=True
+    )
     print(f"Train samples: {len(train_loader.dataset)}")
     print(f"Val samples:   {len(val_loader.dataset)}")
 

@@ -151,8 +151,8 @@ def main():
         train_roots = [str(split_root / "train")]
         val_roots = [str(split_root / "val")]
 
-        train_set = SpatialImageDataset(train_roots, augment=True)
-        val_set = SpatialImageDataset(val_roots, augment=False)
+    train_set = SpatialImageDataset(train_roots, augment=True)
+    val_set = SpatialImageDataset(val_roots, augment=False)
 
         if len(train_set) == 0:
             raise RuntimeError(f"No training images found in: {train_roots}")
@@ -162,8 +162,8 @@ def main():
         train_indices = list(range(len(train_set)))
         val_indices = list(range(len(val_set)))
 
-        train_loader = DataLoader(train_set, batch_size=32, shuffle=True, num_workers=4)
-        val_loader = DataLoader(val_set, batch_size=32, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_set, batch_size=32, shuffle=True, num_workers=4)
+    val_loader = DataLoader(val_set, batch_size=32, shuffle=False, num_workers=4)
     else:
         roots = [
             str(data_root / "kaggle_b"),
